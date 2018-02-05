@@ -110,8 +110,8 @@ int main() {
             throttle_value *= mpc.min_acc;
           
           //To take latency into account, we predict the new vehicle position under current actuation inputs
-          px = px + v * cos(psi + steer_value) * mpc.latency / 1000.;
-          py = py + v * sin(psi + steer_value) * mpc.latency / 1000. ;
+          px = px + v * cos(psi) * mpc.latency / 1000.;
+          py = py + v * sin(psi) * mpc.latency / 1000. ;
           psi = psi + v * steer_value / mpc.Lf * mpc.latency / 1000.;
           v = v + throttle_value * mpc.latency / 1000.;
          
@@ -119,8 +119,8 @@ int main() {
           for (unsigned int i = 0; i < ptsx.size(); ++i)
           {
             double ptsx_temp = ptsx[i];
-            ptsx[i] = (ptsx[i] - px) * cos(-psi) - (ptsy[i] - py) * sin(-psi);
-            ptsy[i] = (ptsx_temp - px) * sin(-psi) + (ptsy[i] - py) * cos(-psi);
+            ptsx[i] = (ptsx[i] - px) * cos(psi) + (ptsy[i] - py) * sin(psi);
+            ptsy[i] = -(ptsx_temp - px) * sin(psi) + (ptsy[i] - py) * cos(psi);
           }         
           
           //polyfit takes a VectorXd but ptsx and ptsy are C++ vectors so we need to convert them
@@ -129,7 +129,7 @@ int main() {
           double* ptry = &ptsy[0];
           Eigen::Map<Eigen::VectorXd> ptsy_transform(ptry, ptsy.size());         
 
-          mpc.printVector(ptsx_transform, ptsy_transform, "ptsx_transform, ptsy_transform");
+          //mpc.printVector(ptsx_transform, ptsy_transform, "ptsx_transform, ptsy_transform");
 
           //Fit a third order polynomial to the waypoints
           auto coeffs = polyfit(ptsx_transform, ptsy_transform, 3);
@@ -145,12 +145,9 @@ int main() {
           Eigen::VectorXd state(6);
           state << 0, 0, 0, v, cte, epsi;  //px, py and psi are 0 in car coordinates
 
-
-          //std::cout << "steer value and throttle value:\t" << steer_value << "\t" << throttle_value << std::endl;
-
           //Compute lowest-cost solution
           auto solution = mpc.Solve(state, coeffs);
-          mpc.printVector(solution, "Computed solution: ");
+          //mpc.printVector(solution, "Computed solution: ");
 
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].

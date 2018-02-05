@@ -12,7 +12,7 @@ const double dt = 0.2;
 const double  Lf = 2.67;
 
 //Target speed
-const double ref_v = 40 * 1.609 / 3.6;  //in m.s-1
+const double ref_v = 60 * 1.609 / 3.6;  //in m.s-1
 
 //Define aliases for starting indices of each state variable within fg[] (convenience)
 size_t x_start = 0;
@@ -135,25 +135,14 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   }
 
 
-  //Initial state values including latency (we project the current position of the vehicle in 
-  //  the future, assuming constant speed and orientation, ie. no actuator inputs)
+  //Initial state values
   double x_ini = state[0];
   double y_ini = state[1];
   double psi_ini = state[2];
   double v_ini = state[3];
   double cte_ini = state[4];
   double epsi_ini = state[5];
-  /*if (latency == 0)
-  {
-    cte_ini = state[4];
-    epsi_ini = state[5];
-  }
-  else
-  {
-    cte_ini = y_ini - (coeffs[0] + coeffs[1] * x_ini + coeffs[2] * pow(x_ini, 2) + coeffs[3] * pow(x_ini, 3)); 
-    epsi_ini = psi_ini - CppAD::atan(coeffs[1] + 2 * coeffs[2] * x_ini + 3 * coeffs[3] * pow(x_ini, 2));
-  }
-  */
+
 
   vars[x_start] = x_ini;
   vars[y_start] = y_ini;
@@ -253,21 +242,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
 
   vector<double> result;
 
-  /*
-  //Collect calculated actuations for the 1st timestep that occurs later than latency
-  size_t delayed_timestep = static_cast<size_t>(ceil((latency / 1000.) / dt));
-  std::cout << "delay: " << delayed_timestep << std::endl;
-
-  result.push_back(solution.x[delta_start + delayed_timestep]);
-  result.push_back(solution.x[a_start + delayed_timestep]);
-
-  for (size_t i = delayed_timestep; i < N - 1; ++i)
-  //Collect predicted x and y positions for future timesteps, so we can plot the trajectory in the sim
-  {
-    result.push_back(solution.x[x_start + i + 1]);
-    result.push_back(solution.x[y_start + i + 1]);
-  }
-  */
+  
   //Collect calculated actuations for the 1st timestep that occurs later than latency
   result.push_back(solution.x[delta_start]);
   result.push_back(solution.x[a_start]);
