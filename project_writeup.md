@@ -1,6 +1,6 @@
 # MPC Controller
 
-Self-Driving car Nanodegree, Term 2, Project 5
+Self-Driving Car Nanodegree, Term 2, Project 5
 
 ## *Luc Frachon, February 2018*
 
@@ -23,7 +23,7 @@ The code is written in C++ and uses uWebSockets to exchange JSON messages with t
   - Speed of the car ($v$) relative to the global referential, __in mph__
   - Steering input ($\delta$ / `steer_value`) in radians. This value is positive for right-hand turns, negative for left-hand.
   - Throttle input ($a$ / `throttle_value`). This is a scalar value from the $[-1, +1]$ range. -1 corresponds to full braking, +1 to full throttle.
-  - Waypoint positions: $x_{A_i}, y_{A_i} \space for \space i = 1,...,n_{waypoints}$ with $n_{waypoints} = 6$ the number of waypoints returned by the simulator at any given time. The choice of these 6 waypoints is presumed to be based on the vehicle's position around the track (or off track). These are stored in two vectors `ptsx` and `ptsy`.
+  - Waypoint positions: $x_{A_i}, y_{A_i} \space for \space i = 1,...,n_{waypoints}$ with $n_{waypoints} = 6$ the number of waypoints returned by the simulator at any given time. These waypoints span roughly 100m in distance and are presumed to be chosen based on the vehicle's position around the track (or off track). These are stored in two vectors `ptsx` and `ptsy`.
 
 - **Outputs:**
 
@@ -127,13 +127,13 @@ To code these features into the cost function, I used a similar code to what was
 
 $$
 \begin{align*}
-cost(S) = &\sum_{t=0}^N k_0 \, \widehat{cte}(t)^2
-	+ \sum_{t=0}^{N} k_1 \, \widehat{e_{\psi}}(t) ^2 
-	+ \sum_{t=0}^{N}k_2 \, \widehat{e_v}(t)^2 \\
-	+ &\sum_{t=0}^{N-1}k_3 \, \widehat{\delta}(t)^2 
-	+ \sum_{t=0}^{N-1}k_4 \, \widehat{a}(t)^2 \\
-      + &\sum_{t=0}^{N-2}k_5 \, \widehat{e_{d\delta}}(t+1)^2 
-      + \sum_{t=0}^{N-2}k_6 \, \widehat{e_{da}}(t+1)^2
+cost(S) = &k_0 \sum_{t=0}^N \, \widehat{cte}(t)^2
+	+ k_1 \sum_{t=0}^{N} \, \widehat{e_{\psi}}(t) ^2 
+	+ k_2 \sum_{t=0}^{N} \, \widehat{e_v}(t)^2 \\
+	+ &k_3 \sum_{t=0}^{N-1} \, \widehat{\delta}(t)^2 
+	+ k_4 \sum_{t=0}^{N-1} \, \widehat{a}(t)^2 \\
+      + &k_5 \sum_{t=0}^{N-2} \, \widehat{e_{d\delta}}(t+1)^2 
+      + k_6 \sum_{t=0}^{N-2} \, \widehat{e_{da}}(t+1)^2
 \end{align*}
 $$
 
@@ -221,11 +221,46 @@ y_c(0) :=& y_c(0) + v(0) \sin(\psi(0)) \times latency\\
 v(0) :=& v(0) + a(0) \times latency
 \end{align*}
 $$
-Note that when $latency = 0$, all the variables remain unchanged. 
+This is obviously an approximation; for instance when calculating $x_c$ and $y_c$, we assume that both $v$ and $\psi$ remain constant, which is only true $a$ and $\delta$ are both zero. But we assume that these changes are second order and latency is sufficiently small for the approximation to hold. Note also that when $latency = 0$, all the variables remain unchanged. 
 
-2. Model tuning
+These new values are then used as starting points by the optimizer and the rest of the process is exactly as described above.
 
+## 2. Model tuning
 
-$$
+The model has many parameters that can be tuned:
 
-$$
+- $N$ (number of prediction time steps)
+- $dt$ (size of prediction time steps) 
+- $v_{ref}$ (target speed) -- although so much a parameter as a goal, it has a great influence on the model's reliability
+- $k_0, ..., k_6$ (weights of each term of the cost function)
+
+As is often the case, they are all inter-related and one cannot drastically change one parameter value without revising the others.
+
+### 2.1. Role of each parameter
+
+I tested many combinations of parameters, both with and without latency and my conclusions with regards to their respective influence on the model's behavior are as follows:
+
+- $N$: Perhaps contrary to intuition, increasing the number of prediction time steps does not improve the model. I found that 7 works best. Values of 5 or less do not work, maybe because the optimizer needs a minimum number of data points to be able to fit a stable solution. Values above 10 also generate instability. This could be due to the increase computation requirement that forces the model to skip frames. More probably, a distant prediction horizon reduces the relative weight of the closest trajectory points (which are going to be executed) to the benefit of points further away (which we will discard and re-compute anyway).
+- $dt$: Again, I found that $dt$ does not need to be very small, despite the assumption we made in section 1.4.2. Values between 0.15 and 0.20 s generate mostly stable solutions. This true both with and without latency, but it can be argued that higher values are especially useful with latency because they counter-balance it: The next time step calculation is already based on a predicted state that would occur later than the latency value.
+  At $v_{ref}$ increases above 80mph, the value of $dt$ needs to be adjusted slightly, simply due to the greater distance travelled in the same amount of time. For instance, with my final model, $dt = 0.13s$ is fully stable at $v_{ref} = 100mph$, whereas $dt = 0.2s$ is not (note that the car does not actually reach 100mph but stabilizes around 92.5mph).
+- $v_{ref}$: In my experience, a good set of parameters (especially $N$ and $dt$) offer great flexibility with regards to the target speed. My final set of parameters works for speeds up to 100mph and possibly higher (I did not run any further tests). However, with a sub-optimal parameter set, a working model will rapidly fail as the target speed is increased.
+- $k_0, k_1$ (cross-track and orientation error weights): Increasing these parameters increases the emphasis of following the fitted trajectory over smoothness. While this is usually desirable, it can cause over-corrections when the car moves away from the center of the track (e.g. during a sharp bend). These corrections can then be over-corrected themselves, causing increasingly large oscillations until the car leaves the track. High values for these parameters must therefore be matched with high values of the steering dampening coefficients ($k_3, k_5$, see below).
+- $k_2, k_4$ (speed error, magnitude of acceleration): These value needs to be set in relation to each other. A high value of $k_4$ will penalize large throttle application, which can prevent the car from going near its target speed. This can be balanced by increasing $k_2$. On the other hand, a low value of $k_4$ can help by allowing the car to brake harder if required, but also makes speed changes more sudden which can cause issues with the predictions because the model assumes a constant speed when computing new $x_c$ and $y_c$ values.
+- $k_3, k_5$ (magnitude of steering input, derivative of steering angle): As explained above, these values act as dampening factors for the cross-track error and the orientation. They can prevent the amplifying oscillations that can occur with high values of $k_0$ and $k_1$.
+- $k_6$ (derivative of acceleration): This has fairly minor effects on the model. I was not very concerned about smoothness in throttle application although with a more complete vehicle model including a tire model, we would definitely need to be. I therefore use a value of 1.
+
+Finally, what matters is the relative value of the $k$ parameters. Therefore increasing one is equivalent to decreasing all others.
+
+### 2.2. Final model parameters and results
+
+My final model uses the following parameters:
+
+- $N=7$
+- $dt=0.13$
+- $v_{ref} = 70 \times 1.609 / 3.6$ (i.e. 70mph, but this can be adjusted as mentioned before)
+- $k_0 = k_1 = k_2 = k_3 = k_5 = 10$
+- $k_4 = 5$
+- $k_6=1$
+
+As mentioned before, the vehicle successfully navigates the track at all speeds up to 100mph -- and possibly higher, but I did not run such tests.
+
