@@ -13,7 +13,7 @@ class MPC {
  public:
   MPC();
   //Set the latency value. 
-  const int latency = 100;  //in ms
+  const int latency = 0;  //in ms
   // This value assumes the model presented in the classroom is used.
 //
 // It was obtained by measuring the radius formed by running the vehicle in the
