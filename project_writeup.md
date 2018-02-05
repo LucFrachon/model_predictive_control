@@ -1,12 +1,12 @@
 # MPC Controller
 
-Self-Driving Car Nanodegree, Term 2, Project 5
+## Self-Driving Car Nanodegree, Term 2, Project 5
 
 ## *Luc Frachon, February 2018*
 
 ## Introduction
 
-This project is the fifth in term 2 of Udacity's Self-Driving Car Nanodegree. It implements a Model Predictive Controller to drive a simulated car around a 3D track (simulator provided by Udacity and build using the Unity game engine).
+This project is the fifth in term 2 of Udacity's Self-Driving Car Nanodegree. It implements a Model Predictive Controller to drive a simulated car around a 3D track (simulator provided by Udacity and built using the Unity game engine).
 
 ## 1. Controller description
 
@@ -18,12 +18,12 @@ The code is written in C++ and uses uWebSockets to exchange JSON messages with t
 
     The program receives the following information from the simulator:
 
-  - Position of the vehicle ($x_v, y_v$ or `px, py` in the `main.cpp` code) in a global Cartesian coordinates system, in meters
-  - Orientation of the car ($\psi$ / `psi`) in global coordinates, in radians. Note that two values are actually provided, `psi` and `psi_unity`. The latter uses clockwise orientation and is offset by 90^o^. We can safely discard it.
-  - Speed of the car ($v$) relative to the global referential, __in mph__
-  - Steering input ($\delta$ / `steer_value`) in radians. This value is positive for right-hand turns, negative for left-hand.
-  - Throttle input ($a$ / `throttle_value`). This is a scalar value from the $[-1, +1]$ range. -1 corresponds to full braking, +1 to full throttle.
-  - Waypoint positions: $x_{A_i}, y_{A_i} \space for \space i = 1,...,n_{waypoints}$ with $n_{waypoints} = 6$ the number of waypoints returned by the simulator at any given time. These waypoints span roughly 100m in distance and are presumed to be chosen based on the vehicle's position around the track (or off track). These are stored in two vectors `ptsx` and `ptsy`.
+      - Position of the vehicle ($x_v, y_v$ or `px, py` in the `main.cpp` code) in a global Cartesian coordinates system, in meters
+      - Orientation of the car ($\psi$ / `psi`) in global coordinates, in radians. Note that two values are actually provided, `psi` and `psi_unity`. The latter uses clockwise orientation and is offset by 90^o^. We can safely discard it.
+      - Speed of the car ($v$) relative to the global referential, __in mph__
+      - Steering input ($\delta$ / `steer_value`) in radians. This value is positive for right-hand turns, negative for left-hand.
+      - Throttle input ($a$ / `throttle_value`). This is a scalar value from the $[-1, +1]$ range. -1 corresponds to full braking, +1 to full throttle.
+      - Waypoint positions: $x_{A_i}, y_{A_i} \space for \space i = 1,...,n_{waypoints}$ with $n_{waypoints} = 6$ the number of waypoints returned by the simulator at any given time. These waypoints span roughly 100m in distance and are presumed to be chosen based on the vehicle's position around the track (or off track). These are stored in two vectors `ptsx` and `ptsy`.
 
 - **Outputs:**
 
@@ -36,7 +36,7 @@ The code is written in C++ and uses uWebSockets to exchange JSON messages with t
 
 ### 1.2. Variable conversions
 
-Before explaining the control process, I need to mention a technicality. Most of the variables received from or sent back to the simulator cannot be used as such and need to be converted in one way or the other:
+Before explaining the control process, we need to deal with a technicality. Most of the variables received from or sent back to the simulator cannot be used as such and need to be converted in one way or the other:
 
 - The vehicle's speed is converted from mph to SI units (m.s^-1^):
 
@@ -241,7 +241,7 @@ As is often the case, they are all inter-related and one cannot drastically chan
 I tested many combinations of parameters, both with and without latency and my conclusions with regards to their respective influence on the model's behavior are as follows:
 
 - $N$: Perhaps contrary to intuition, increasing the number of prediction time steps does not improve the model. I found that 7 works best. Values of 5 or less do not work, maybe because the optimizer needs a minimum number of data points to be able to fit a stable solution. Values above 10 also generate instability. This could be due to the increase computation requirement that forces the model to skip frames. More probably, a distant prediction horizon reduces the relative weight of the closest trajectory points (which are going to be executed) to the benefit of points further away (which we will discard and re-compute anyway).
-- $dt$: Again, I found that $dt$ does not need to be very small, despite the assumption we made in section 1.4.2. Values between 0.15 and 0.20 s generate mostly stable solutions. This true both with and without latency, but it can be argued that higher values are especially useful with latency because they counter-balance it: The next time step calculation is already based on a predicted state that would occur later than the latency value.
+- $dt$: I found that $dt$ does not need to be very small, despite the assumption we made in section 1.4.2. Values between 0.15 and 0.20s generate mostly stable solutions. This true both with and without latency, but it can be argued that higher values are especially useful with latency because they counter-balance it: The next time step calculation is already based on a predicted state that would occur later than the latency value.
   At $v_{ref}$ increases above 80mph, the value of $dt$ needs to be adjusted slightly, simply due to the greater distance travelled in the same amount of time. For instance, with my final model, $dt = 0.13s$ is fully stable at $v_{ref} = 100mph$, whereas $dt = 0.2s$ is not (note that the car does not actually reach 100mph but stabilizes around 92.5mph).
 - $v_{ref}$: In my experience, a good set of parameters (especially $N$ and $dt$) offer great flexibility with regards to the target speed. My final set of parameters works for speeds up to 100mph and possibly higher (I did not run any further tests). However, with a sub-optimal parameter set, a working model will rapidly fail as the target speed is increased.
 - $k_0, k_1$ (cross-track and orientation error weights): Increasing these parameters increases the emphasis of following the fitted trajectory over smoothness. While this is usually desirable, it can cause over-corrections when the car moves away from the center of the track (e.g. during a sharp bend). These corrections can then be over-corrected themselves, causing increasingly large oscillations until the car leaves the track. High values for these parameters must therefore be matched with high values of the steering dampening coefficients ($k_3, k_5$, see below).
@@ -256,11 +256,28 @@ Finally, what matters is the relative value of the $k$ parameters. Therefore inc
 My final model uses the following parameters:
 
 - $N=7$
-- $dt=0.13$
+- $dt=0.20$ (decrease to $0.13$ at $v_ref = 100mph$)
 - $v_{ref} = 70 \times 1.609 / 3.6$ (i.e. 70mph, but this can be adjusted as mentioned before)
 - $k_0 = k_1 = k_2 = k_3 = k_5 = 10$
 - $k_4 = 5$
 - $k_6=1$
 
 As mentioned before, the vehicle successfully navigates the track at all speeds up to 100mph -- and possibly higher, but I did not run such tests.
+
+## 3. Discussion
+
+This project taught me the fundamentals of an MPC controller through an interesting and appealing application. The model works well and is fairly robust to different target speeds. However it is likely to be difficult to generalize for the following reasons:
+
+- The model is very sensitive to its parameters $N$ and $dt$. To obtain a stable controller, I had to use a fairly low value for $N$ and a fairly high value for $dt$. While this is perfectly reasonable in a very controller environment such as a track with no sharp turn, in real life this might be a limitation. In a changing environment with traffic, pedestrians, crossings, traffic lights etc., the ability to react faster and plan further ahead may well be a requirement.
+- With the simple bicycle model that we used, and the simple physics of the simulator, the car is able to go around the track at over 92mph barely slowing down in corners. In real life, tire physics must be taken into account at high speed, and the model needs to be able to brake before corners to avoid accidents. A more complex car model would be useful, but it obviously comes with more expensive calculations and additional parameters to tune.
+
+Within the setup of this project, there are nonetheless some possible ideas to improve upon this particular implementation. The first would be to further refine the weight parameters. I did not spend a lot of time fine-tuning these as their effect on the model is much smaller than $N$ and $dt$, however there might be some weight values that allow the use of smaller $dt$ values , thus mitigating the first limitation mentioned above.
+
+Another ideas would be to add a constraint on the admissible values of $cte$. The distance to the kerbs is around 2.3m each side of the car when it is standing in the exact middle of the track, so just like we constrain the values of $\delta$, we can force the optimizer to find only solutions where $cte$ does not exceeds these values.
+
+I tried implementing this very quickly and it did seem to help at 80mph, but the can ran wide at 100mph even though it was driving safely before I added this constraint. I did not have the time to further investigate, but it is not inconceivable that the added constraint means more calculations, and therefore skipped frames at high speed.
+
+## Appendix: Development environment
+
+Code developed on an i5-4440 x64 3.10GHz, quad-core CPU running MS Windows 10 Pro. The code was written and tested within the Windows Ubuntu Bash (16.04). The text editor used is Sublime Text.
 
