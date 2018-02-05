@@ -6,13 +6,13 @@
 using CppAD::AD;
 
 //Set the timestep length and duration
-const size_t N = 10;
+const size_t N = 7;
 const double dt = 0.2;
 //Geometric constant
 const double  Lf = 2.67;
 
 //Target speed
-const double ref_v = 60 * 1.609 / 3.6;  //in m.s-1
+const double ref_v = 70 * 1.609 / 3.6;  //in m.s-1
 
 //Define aliases for starting indices of each state variable within fg[] (convenience)
 size_t x_start = 0;
@@ -42,19 +42,19 @@ class FG_eval {
 
     //Cost of reference state
     for (size_t t = 0; t < N; ++t) {
-      fg[0] += 2000 * CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 2000 * CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += 300 * CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += 10 * CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 10 * CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 10 * CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
     //Minimize actuator inputs (smoother trajectory changes)
     for (size_t t = 0; t < N - 1; ++t) {
-      fg[0] += 1000 * CppAD::pow(vars[delta_start + t], 2);
-      fg[0] += 1000 * CppAD::pow(vars[a_start + t], 2);
+      fg[0] += 10 * CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 5 * CppAD::pow(vars[a_start + t], 2);
     }
     //Minimize actuator input gradients (smoother inputs)
     for (size_t t = 0; t < N - 2; ++t) {
-      fg[0] += 100 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 100 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 10 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 1 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     // ## Constraints definition ##
